@@ -1,0 +1,344 @@
+local player = game.Players.LocalPlayer
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- FUNÇÕES
+local function getCharacter()
+	return player.Character or player.CharacterAdded:Wait()
+end
+
+local function attack()
+	local char = getCharacter()
+	for _, tool in pairs(char:GetChildren()) do
+		if tool:IsA("Tool") then
+			tool:Activate()
+		end
+	end
+end
+
+-- GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame", screenGui)
+frame.Size = UDim2.new(0, 340, 0, 520)
+frame.Position = UDim2.new(0.1, 0, 0.1, 0)
+frame.BackgroundColor3 = Color3.fromRGB(27,27,27)
+frame.Active = true
+frame.Draggable = true
+Instance.new("UICorner", frame)
+
+-- RGB BORDER
+local stroke = Instance.new("UIStroke", frame)
+stroke.Thickness = 3
+task.spawn(function()
+	local h=0
+	while true do
+		h+=0.005
+		if h>1 then h=0 end
+		stroke.Color = Color3.fromHSV(h,1,1)
+		task.wait(0.03)
+	end
+end)
+
+-- BOTÃO MINIMIZAR
+local minimizeBtn = Instance.new("TextButton", frame)
+minimizeBtn.Size = UDim2.new(0,30,0,30)
+minimizeBtn.Position = UDim2.new(1,-35,0,5)
+minimizeBtn.Text = "-"
+minimizeBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+minimizeBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", minimizeBtn)
+
+-- BOTÃO ABRIR
+local openBtn = Instance.new("TextButton", screenGui)
+openBtn.Size = UDim2.new(0,120,0,40)
+openBtn.Position = UDim2.new(0.05,0,0.2,0)
+openBtn.Text = "Abrir Hub"
+openBtn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+openBtn.TextColor3 = Color3.new(1,1,1)
+openBtn.Visible = false
+openBtn.Active = true
+openBtn.Draggable = true
+Instance.new("UICorner", openBtn)
+
+-- VARIÁVEIS
+local running = false
+local selectedEnemies = {}
+local allEnemies = {}
+
+local flying = false
+local noclip = false
+local bodyVel
+local moveDir = Vector3.zero
+
+-- INPUT FLY
+UIS.InputBegan:Connect(function(i,g)
+	if g then return end
+	if i.KeyCode==Enum.KeyCode.W then moveDir+=Vector3.new(0,0,-1) end
+	if i.KeyCode==Enum.KeyCode.S then moveDir+=Vector3.new(0,0,1) end
+	if i.KeyCode==Enum.KeyCode.A then moveDir+=Vector3.new(-1,0,0) end
+	if i.KeyCode==Enum.KeyCode.D then moveDir+=Vector3.new(1,0,0) end
+	if i.KeyCode==Enum.KeyCode.Space then moveDir+=Vector3.new(0,1,0) end
+	if i.KeyCode==Enum.KeyCode.LeftControl then moveDir+=Vector3.new(0,-1,0) end
+end)
+
+UIS.InputEnded:Connect(function(i)
+	if i.KeyCode==Enum.KeyCode.W then moveDir-=Vector3.new(0,0,-1) end
+	if i.KeyCode==Enum.KeyCode.S then moveDir-=Vector3.new(0,0,1) end
+	if i.KeyCode==Enum.KeyCode.A then moveDir-=Vector3.new(-1,0,0) end
+	if i.KeyCode==Enum.KeyCode.D then moveDir-=Vector3.new(1,0,0) end
+	if i.KeyCode==Enum.KeyCode.Space then moveDir-=Vector3.new(0,1,0) end
+	if i.KeyCode==Enum.KeyCode.LeftControl then moveDir-=Vector3.new(0,-1,0) end
+end)
+
+-- UI HELPERS
+local function styleButton(b)
+	b.BackgroundColor3 = Color3.fromRGB(40,40,40)
+	b.TextColor3 = Color3.new(1,1,1)
+	b.AutoButtonColor = false
+	Instance.new("UICorner", b)
+end
+
+local function styleBox(b)
+	b.BackgroundColor3 = Color3.fromRGB(60,90,140)
+	b.TextColor3 = Color3.new(1,1,1)
+	Instance.new("UICorner", b)
+end
+
+-- TÍTULO
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1,0,0,40)
+title.Text = "Ultimate Hub"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+title.TextScaled = true
+
+-- SEARCH
+local search = Instance.new("TextBox", frame)
+search.Size = UDim2.new(0.9,0,0,30)
+search.Position = UDim2.new(0.05,0,0,50)
+search.PlaceholderText = "Pesquisar..."
+search.BackgroundColor3 = Color3.fromRGB(35,35,35)
+search.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner", search)
+
+-- LISTA
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Size = UDim2.new(0.9,0,0,180)
+scroll.Position = UDim2.new(0.05,0,0,90)
+scroll.BackgroundColor3 = Color3.fromRGB(30,30,30)
+Instance.new("UICorner", scroll)
+
+local layout = Instance.new("UIListLayout", scroll)
+
+-- BOTÕES
+local refreshBtn = Instance.new("TextButton", frame)
+refreshBtn.Size = UDim2.new(0.9,0,0,30)
+refreshBtn.Position = UDim2.new(0.05,0,0,280)
+refreshBtn.Text = "🔄 Atualizar Lista"
+styleButton(refreshBtn)
+
+local startBtn = Instance.new("TextButton", frame)
+startBtn.Size = UDim2.new(0.42,0,0,40)
+startBtn.Position = UDim2.new(0.05,0,0,320)
+startBtn.Text = "Iniciar"
+styleButton(startBtn)
+
+local stopBtn = Instance.new("TextButton", frame)
+stopBtn.Size = UDim2.new(0.42,0,0,40)
+stopBtn.Position = UDim2.new(0.53,0,0,320)
+stopBtn.Text = "Parar"
+styleButton(stopBtn)
+
+-- MOVEMENT
+local ws = Instance.new("TextBox", frame)
+ws.Size = UDim2.new(0.42,0,0,30)
+ws.Position = UDim2.new(0.05,0,0,370)
+ws.PlaceholderText = "WalkSpeed"
+styleBox(ws)
+
+local jp = Instance.new("TextBox", frame)
+jp.Size = UDim2.new(0.42,0,0,30)
+jp.Position = UDim2.new(0.53,0,0,370)
+jp.PlaceholderText = "JumpPower"
+styleBox(jp)
+
+local apply = Instance.new("TextButton", frame)
+apply.Size = UDim2.new(0.9,0,0,30)
+apply.Position = UDim2.new(0.05,0,0,405)
+apply.Text = "Aplicar"
+styleButton(apply)
+
+-- FLY SPEED
+local flySpeedBox = Instance.new("TextBox", frame)
+flySpeedBox.Size = UDim2.new(0.9,0,0,30)
+flySpeedBox.Position = UDim2.new(0.05,0,0,440)
+flySpeedBox.PlaceholderText = "Velocidade do Fly"
+styleBox(flySpeedBox)
+
+-- FLY / NOCLIP
+local flyBtn = Instance.new("TextButton", frame)
+flyBtn.Size = UDim2.new(0.42,0,0,30)
+flyBtn.Position = UDim2.new(0.05,0,0,475)
+flyBtn.Text = "Fly: OFF"
+styleButton(flyBtn)
+
+local noclipBtn = Instance.new("TextButton", frame)
+noclipBtn.Size = UDim2.new(0.42,0,0,30)
+noclipBtn.Position = UDim2.new(0.53,0,0,475)
+noclipBtn.Text = "Noclip: OFF"
+styleButton(noclipBtn)
+
+-- MINIMIZAR LOGIC
+minimizeBtn.MouseButton1Click:Connect(function()
+	frame.Visible = false
+	openBtn.Visible = true
+end)
+
+openBtn.MouseButton1Click:Connect(function()
+	frame.Visible = true
+	openBtn.Visible = false
+end)
+
+-- INIMIGOS
+local function getEnemies()
+	local t={}
+	for _,v in pairs(workspace:GetDescendants()) do
+		if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart") then
+			local h=v:FindFirstChildOfClass("Humanoid")
+			if h and h.Health>0 then table.insert(t,v) end
+		end
+	end
+	return t
+end
+
+local function render(f)
+	for _,v in pairs(scroll:GetChildren()) do
+		if v:IsA("TextButton") then v:Destroy() end
+	end
+	
+	for _,e in pairs(allEnemies) do
+		if f=="" or string.find(string.lower(e.Name),string.lower(f)) then
+			local b=Instance.new("TextButton",scroll)
+			b.Size=UDim2.new(1,0,0,30)
+			b.Text=e.Name
+			styleButton(b)
+
+			b.MouseButton1Click:Connect(function()
+				if selectedEnemies[e] then
+					selectedEnemies[e]=nil
+					b.BackgroundColor3=Color3.fromRGB(40,40,40)
+				else
+					selectedEnemies[e]=true
+					b.BackgroundColor3=Color3.fromRGB(70,70,70)
+				end
+			end)
+		end
+	end
+	
+	task.wait()
+	scroll.CanvasSize=UDim2.new(0,0,0,layout.AbsoluteContentSize.Y)
+end
+
+local function refresh()
+	allEnemies=getEnemies()
+	render(search.Text)
+end
+
+-- EVENTOS
+search:GetPropertyChangedSignal("Text"):Connect(function()
+	render(search.Text)
+end)
+
+refreshBtn.MouseButton1Click:Connect(function()
+	selectedEnemies={}
+	refresh()
+end)
+
+startBtn.MouseButton1Click:Connect(function()
+	if running then return end
+	running=true
+	
+	while running do
+		for e,_ in pairs(selectedEnemies) do
+			while e and e.Parent do
+				local hrp=e:FindFirstChild("HumanoidRootPart")
+				if not hrp then break end
+				
+				local char=getCharacter()
+				local my=char:FindFirstChild("HumanoidRootPart")
+				
+				if my then
+					my.CFrame = hrp.CFrame * CFrame.new(0,5,0)
+				end
+				
+				attack()
+				task.wait(0.1)
+			end
+		end
+		task.wait()
+	end
+end)
+
+stopBtn.MouseButton1Click:Connect(function()
+	running=false
+end)
+
+-- APPLY MOVEMENT
+apply.MouseButton1Click:Connect(function()
+	local h=getCharacter():FindFirstChildOfClass("Humanoid")
+	if h then
+		if tonumber(ws.Text) then h.WalkSpeed=tonumber(ws.Text) end
+		if tonumber(jp.Text) then h.JumpPower=tonumber(jp.Text) end
+	end
+end)
+
+-- FLY
+flyBtn.MouseButton1Click:Connect(function()
+	flying=not flying
+	flyBtn.Text="Fly: "..(flying and "ON" or "OFF")
+
+	local hrp=getCharacter():WaitForChild("HumanoidRootPart")
+
+	if flying then
+		bodyVel=Instance.new("BodyVelocity",hrp)
+		bodyVel.MaxForce=Vector3.new(1e9,1e9,1e9)
+
+		RunService.RenderStepped:Connect(function()
+			if flying and bodyVel then
+				local cam=workspace.CurrentCamera
+				local speed=tonumber(flySpeedBox.Text) or 50
+				
+				local dir =
+					(cam.CFrame.LookVector * -moveDir.Z) +
+					(cam.CFrame.RightVector * moveDir.X) +
+					Vector3.new(0,moveDir.Y,0)
+
+				bodyVel.Velocity = dir * speed
+			end
+		end)
+	else
+		if bodyVel then bodyVel:Destroy() end
+	end
+end)
+
+-- NOCLIP
+noclipBtn.MouseButton1Click:Connect(function()
+	noclip=not noclip
+	noclipBtn.Text="Noclip: "..(noclip and "ON" or "OFF")
+end)
+
+RunService.Stepped:Connect(function()
+	if noclip then
+		for _,v in pairs(getCharacter():GetDescendants()) do
+			if v:IsA("BasePart") then
+				v.CanCollide=false
+			end
+		end
+	end
+end)
+
+-- INIT
+refresh()
