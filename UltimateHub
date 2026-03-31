@@ -271,7 +271,7 @@ startBtn.MouseButton1Click:Connect(function()
 				local my=char:FindFirstChild("HumanoidRootPart")
 				
 				if my then
-					my.CFrame = hrp.CFrame * CFrame.new(0,5,0)
+					my.CFrame = hrp.CFrame * CFrame.new(0,-6,0)
 				end
 				
 				attack()
