@@ -279,7 +279,7 @@ RunService.RenderStepped:Connect(function()
 		local my = char:FindFirstChild("HumanoidRootPart")
 
 		if hrp and my then
-			my.CFrame = hrp.CFrame * CFrame.new(0, -10, 0)
+			my.CFrame = hrp.CFrame * CFrame.new(0, -17, 0)
 			attack()
 		end
 	end
