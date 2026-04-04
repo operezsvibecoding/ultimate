@@ -67,6 +67,7 @@ Instance.new("UICorner", openBtn)
 local running = false
 local selectedEnemies = {}
 local allEnemies = {}
+local currentTarget = nil
 
 local flying = false
 local noclip = false
@@ -191,7 +192,7 @@ noclipBtn.Position = UDim2.new(0.53,0,0,475)
 noclipBtn.Text = "Noclip: OFF"
 styleButton(noclipBtn)
 
--- MINIMIZAR LOGIC
+-- MINIMIZAR
 minimizeBtn.MouseButton1Click:Connect(function()
 	frame.Visible = false
 	openBtn.Visible = true
@@ -247,7 +248,6 @@ local function refresh()
 	render(search.Text)
 end
 
--- EVENTOS
 search:GetPropertyChangedSignal("Text"):Connect(function()
 	render(search.Text)
 end)
@@ -257,33 +257,42 @@ refreshBtn.MouseButton1Click:Connect(function()
 	refresh()
 end)
 
-startBtn.MouseButton1Click:Connect(function()
-	if running then return end
-	running=true
-	
-	while running do
-		for e,_ in pairs(selectedEnemies) do
-			while e and e.Parent do
-				local hrp=e:FindFirstChild("HumanoidRootPart")
-				if not hrp then break end
-				
-				local char=getCharacter()
-				local my=char:FindFirstChild("HumanoidRootPart")
-				
-				if my then
-					my.CFrame = hrp.CFrame * CFrame.new(0,-15,0)
-				end
-				
-				attack()
-				task.wait(0.1)
+-- LOOP PRINCIPAL (CORRIGIDO)
+RunService.RenderStepped:Connect(function()
+	if not running then return end
+
+	currentTarget = nil
+
+	for e,_ in pairs(selectedEnemies) do
+		if e and e.Parent then
+			local hum = e:FindFirstChildOfClass("Humanoid")
+			if hum and hum.Health > 0 then
+				currentTarget = e
+				break
 			end
 		end
-		task.wait()
+	end
+
+	if currentTarget then
+		local hrp = currentTarget:FindFirstChild("HumanoidRootPart")
+		local char = getCharacter()
+		local my = char:FindFirstChild("HumanoidRootPart")
+
+		if hrp and my then
+			my.CFrame = hrp.CFrame * CFrame.new(0, -10, 0)
+			attack()
+		end
 	end
 end)
 
+-- BOTÕES
+startBtn.MouseButton1Click:Connect(function()
+	running = true
+end)
+
 stopBtn.MouseButton1Click:Connect(function()
-	running=false
+	running = false
+	currentTarget = nil
 end)
 
 -- APPLY MOVEMENT
